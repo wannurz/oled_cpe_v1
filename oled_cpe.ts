@@ -3,27 +3,30 @@ namespace OLED_CPE {
     let x = 0
     let y = 0
     let buf: Buffer = pins.createBuffer(1024)
+    const OLED_ADDR = 0x3C // = 60 base 10
 
     function cmd(c: number) {
-        pins.i2cWriteNumber(60, 0, NumberFormat.UInt8BE)
-        pins.i2cWriteNumber(60, c, NumberFormat.UInt8BE)
+        pins.i2cWriteBuffer(OLED_ADDR, pins.createBufferFromArray([0x00, c]))
     }
 
     function sendData() {
-        pins.i2cWriteNumber(60, 0x40, NumberFormat.UInt8BE)
-        OLED_CPE.init();
-        OLED_CPE.showString("Hello!");
-
+        let sendBuf = pins.createBuffer(buf.length + 1)
+        sendBuf[0] = 0x40 // Data mode
+        for (let i = 0; i < buf.length; i++) {
+            sendBuf[i + 1] = buf[i]
+        }
+        pins.i2cWriteBuffer(OLED_ADDR, sendBuf)
     }
 
     //% blockId="OLED_CPE_SHOWSTRING" block="OLED show string %s"
     //% weight=100 blockGap=8
     //% parts=OLED_CPE trackArgs=0
     export function showString(s: string) {
-        let i = 0
-        while (i < s.length) {
-            buf[i] = s.charCodeAt(i)
-            i++
+        clear() // เริ่มต้นล้างหน้าจอก่อน
+        // ข้อความนี้จะเขียนเป็นตัวอักษรในแนว pixel bitmap จริง ๆ ต้องใช้ font table
+        // แต่ในเวอร์ชันนี้จะแปลง ASCII ใส่ใน buffer แบบง่าย (ไม่แสดงผลบนหน้าจอจริงจัง)
+        for (let i = 0; i < s.length && i < 128; i++) {
+            buf[i] = s.charCodeAt(i) // แทนด้วย ASCII เพื่อทดสอบการส่งข้อมูล
         }
         sendData()
     }
@@ -39,7 +42,8 @@ namespace OLED_CPE {
     //% weight=70 blockGap=8
     //% parts=OLED_CPE trackArgs=0
     export function pixel(x: number, y: number, color: number = 1) {
-        let index = (x + y * 128) >> 3
+        if (x < 0 || x >= 128 || y < 0 || y >= 64) return
+        let index = x + ((y >> 3) * 128)
         let bit = y % 8
         if (color)
             buf[index] |= (1 << bit)
@@ -62,7 +66,7 @@ namespace OLED_CPE {
     //% weight=110 blockGap=8
     //% parts=OLED_CPE
     export function init() {
-        cmd(0xAE)
+        cmd(0xAE) // Display OFF
         cmd(0xD5)
         cmd(0x80)
         cmd(0xA8)
@@ -86,7 +90,7 @@ namespace OLED_CPE {
         cmd(0x40)
         cmd(0xA4)
         cmd(0xA6)
-        cmd(0xAF)
+        cmd(0xAF) // Display ON
         clear()
     }
 }
